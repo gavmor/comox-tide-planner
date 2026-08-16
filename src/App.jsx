@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'preact/hooks';
+
 const TRIP_DATA = [
  { day: 'Fri', date: 'Aug 14', temp: 24, tempF: 75, tides: [{ time: '6:48am', val: 6.8, h: 4.5 }, { time: '8:17pm', val: 20.28, h: 5.0 }] },
  { day: 'Sat', date: 'Aug 15', temp: 23, tempF: 73, tides: [{ time: '7:49am', val: 7.82, h: 4.3 }, { time: '8:45pm', val: 20.75, h: 4.9 }] },
@@ -14,7 +16,76 @@ const TRIP_DATA = [
 const AXIS_LABELS = ['12 AM', '6 AM', '12 PM', '6 PM', '12 AM'];
 const MINI_AXIS_LABELS = ['12a', '6a', '12p', '6p', '12a'];
 
+// All trip dates fall in August 2026 — a fixed month map keeps ISO conversion trivial and avoids Date-parsing TZ bugs.
+const TRIP_YEAR = 2026;
+const MONTH_NUM = { Aug: '08' };
+const toISODate = (dateStr) => {
+ const [mon, day] = dateStr.split(' ');
+ return `${TRIP_YEAR}-${MONTH_NUM[mon]}-${day.padStart(2, '0')}`;
+};
+
+const COMOX_LAT = 49.6734;
+const COMOX_LON = -124.928;
+const COMOX_TZ = 'America/Vancouver';
+
+function useLiveTemps() {
+ const [temps, setTemps] = useState({});
+ const [updatedAt, setUpdatedAt] = useState(null);
+
+ useEffect(() => {
+ let cancelled = false;
+
+ async function fetchRange(baseUrl, startISO, endISO) {
+ const url = `${baseUrl}?latitude=${COMOX_LAT}&longitude=${COMOX_LON}&start_date=${startISO}&end_date=${endISO}&daily=temperature_2m_max&timezone=${encodeURIComponent(COMOX_TZ)}`;
+ const res = await fetch(url);
+ if (!res.ok) return {};
+ const json = await res.json();
+ const out = {};
+ json.daily.time.forEach((date, i) => {
+ out[date] = json.daily.temperature_2m_max[i];
+ });
+ return out;
+ }
+
+ async function load() {
+ try {
+ const isoDates = TRIP_DATA.map((d) => toISODate(d.date));
+ const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: COMOX_TZ });
+ const pastDates = isoDates.filter((d) => d < todayISO);
+ const futureDates = isoDates.filter((d) => d >= todayISO);
+
+ const [pastResults, futureResults] = await Promise.all([
+ pastDates.length
+ ? fetchRange('https://archive-api.open-meteo.com/v1/archive', pastDates[0], pastDates[pastDates.length - 1])
+ : {},
+ futureDates.length
+ ? fetchRange('https://api.open-meteo.com/v1/forecast', futureDates[0], futureDates[futureDates.length - 1])
+ : {},
+ ]);
+
+ if (cancelled) return;
+ const merged = { ...pastResults, ...futureResults };
+ if (Object.keys(merged).length) {
+ setTemps(merged);
+ setUpdatedAt(new Date());
+ }
+ } catch {
+ // Network error or API outage — keep the static fallback values, don't surface an error UI.
+ }
+ }
+
+ load();
+ return () => {
+ cancelled = true;
+ };
+ }, []);
+
+ return { temps, updatedAt };
+}
+
 export default function App() {
+ const { temps: liveTemps, updatedAt } = useLiveTemps();
+
  // Define peak heat hours (1 PM to 5 PM) and buffer for tide overlap
  const HOT_START = 13;
  const HOT_END = 17;
@@ -32,6 +103,11 @@ export default function App() {
  <header className="mb-6 sm:mb-16 border-b border-slate-200 pb-5 sm:pb-8">
  <h1 className="text-2xl sm:text-4xl font-semibold sm:font-light tracking-tight text-slate-900">Comox Planner</h1>
  <p className="text-slate-500 mt-1.5 sm:mt-2 text-xs sm:text-sm tracking-wide uppercase">August 14–23 • Tides & Peak Heat</p>
+ {updatedAt && (
+ <p className="text-slate-400 mt-2 text-[11px] sm:text-xs italic">
+ Temps live as of {updatedAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+ </p>
+ )}
  </header>
 
  {/* Global Timeline Axis — sticky so it stays visible while scrolling a long list */}
@@ -41,6 +117,10 @@ export default function App() {
 
  <div className="space-y-7 sm:space-y-12">
  {TRIP_DATA.map((day, idx) => {
+ const liveMax = liveTemps[toISODate(day.date)];
+ const hasLive = liveMax !== undefined;
+ const displayTemp = hasLive ? Math.round(liveMax) : day.temp;
+
  return (
  <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-6">
 
@@ -48,7 +128,7 @@ export default function App() {
  <div className="w-full sm:w-28 shrink-0 flex items-baseline justify-between sm:flex-col sm:items-start sm:justify-start gap-0">
  <span className="text-base sm:text-sm font-semibold sm:font-medium text-slate-900 whitespace-nowrap">{day.day}, {day.date}</span>
  <span className="text-sm sm:text-xs text-slate-500 sm:text-slate-400 font-medium sm:font-light tracking-wide whitespace-nowrap">
- {day.temp}°C {day.note && <span className="ml-1 text-xs sm:text-[10px] italic">({day.note})</span>}
+ {displayTemp}°C {day.note && !hasLive && <span className="ml-1 text-xs sm:text-[10px] italic">({day.note})</span>}
  </span>
  </div>
 
