@@ -83,6 +83,63 @@ function useLiveTemps() {
  return { temps, updatedAt };
 }
 
+// Semi-diurnal (M2) tides run ~12.4h between successive highs — used only to shape an
+// illustrative curve, not to predict real tide times/heights (we have no CHS API access).
+const TIDE_PERIOD_H = 12.4;
+const LOW_TIDE_DROP = 3.2;
+const MIN_LOW_HEIGHT = 0.6;
+
+// Highs bracketing this day's [0, 24] window, including the neighboring days' nearest
+// high so the curve extrapolates smoothly across midnight instead of flattening at the edges.
+function tideAnchors(days, idx) {
+ const day = days[idx];
+ const own = day.tides.map((t) => ({ t: t.val, h: t.h }));
+ const prevLast = days[idx - 1]?.tides.at(-1);
+ const nextFirst = days[idx + 1]?.tides[0];
+ const prevAnchor = prevLast
+ ? { t: prevLast.val - 24, h: prevLast.h }
+ : { t: own[0].t - TIDE_PERIOD_H, h: own[0].h };
+ const nextAnchor = nextFirst
+ ? { t: nextFirst.val + 24, h: nextFirst.h }
+ : { t: own.at(-1).t + TIDE_PERIOD_H, h: own.at(-1).h };
+ return [prevAnchor, ...own, nextAnchor];
+}
+
+// Height between two known highs: a raised-cosine descent to an estimated trough at the
+// midpoint, then a raised-cosine ascent back up — smooth, continuous, and passes exactly
+// through each known high.
+function tideHeightAt(anchors, t) {
+ for (let i = 0; i < anchors.length - 1; i++) {
+ const a = anchors[i], b = anchors[i + 1];
+ if (t < a.t || t > b.t) continue;
+ const mid = (a.t + b.t) / 2;
+ const troughH = Math.max(MIN_LOW_HEIGHT, (a.h + b.h) / 2 - LOW_TIDE_DROP);
+ if (t <= mid) {
+ const frac = (t - a.t) / (mid - a.t || 1);
+ return troughH + (a.h - troughH) * ((1 + Math.cos(Math.PI * frac)) / 2);
+ }
+ const frac = (t - mid) / (b.t - mid || 1);
+ return troughH + (b.h - troughH) * ((1 - Math.cos(Math.PI * frac)) / 2);
+ }
+ return anchors[0].h;
+}
+
+// SVG path (viewBox 0 0 1000 100) tracing the approximate tide curve across the day.
+function sparklinePath(days, idx, samples = 96) {
+ const anchors = tideAnchors(days, idx);
+ const pts = Array.from({ length: samples + 1 }, (_, i) => {
+ const t = (i / samples) * 24;
+ return { t, h: tideHeightAt(anchors, t) };
+ });
+ const heights = pts.map((p) => p.h);
+ const minH = Math.min(...heights);
+ const range = Math.max(...heights) - minH || 1;
+ const PAD = 15; // percent padding top/bottom so the curve doesn't touch the row edges
+ const toX = (t) => ((t / 24) * 1000).toFixed(1);
+ const toY = (h) => (100 - PAD - ((h - minH) / range) * (100 - 2 * PAD)).toFixed(1);
+ return pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(p.t)} ${toY(p.h)}`).join(' ');
+}
+
 export default function App() {
  const { temps: liveTemps, updatedAt } = useLiveTemps();
 
@@ -135,6 +192,16 @@ export default function App() {
  {/* Timeline Bar */}
  <div className="flex-1">
  <div className="relative h-1 sm:h-[1px] bg-slate-200 rounded-full mt-8 sm:mt-0 mx-1 sm:mx-0">
+
+ {/* Tide Sparkline — illustrative curve through the known high-tide points, not a real prediction */}
+ <svg
+ className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-7 sm:h-6 w-full overflow-visible text-blue-200"
+ viewBox="0 0 1000 100"
+ preserveAspectRatio="none"
+ aria-hidden="true"
+ >
+ <path d={sparklinePath(TRIP_DATA, idx)} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+ </svg>
 
  {/* Heat Band */}
  <div
@@ -198,6 +265,9 @@ export default function App() {
  <div className="w-4 h-4 rounded-sm bg-orange-200/80 border-2 border-orange-400/70"></div> Peak Heat (1PM - 5PM)
  </div>
  </div>
+ <p className="mt-3 text-center text-[11px] sm:text-[10px] text-slate-400 italic">
+ Tide curve is illustrative — not a precise tide prediction.
+ </p>
 
  </div>
  </div>
