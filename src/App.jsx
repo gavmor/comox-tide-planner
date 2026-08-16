@@ -124,6 +124,22 @@ function tideHeightAt(anchors, t) {
  return anchors[0].h;
 }
 
+// Diverging cool→warm color scale for the daily temp, blended in RGB (not hue-rotated)
+// so the gradient never passes through green/yellow — stays a muted blue↔orange axis.
+const COOL_RGB = [96, 165, 250]; // blue-400
+const WARM_RGB = [234, 88, 12]; // orange-600
+const LIGHTEN = 0.6; // pull toward white so the sparkline stays subtle under the heat band/dots
+
+function tempToColor(temp, minTemp, maxTemp) {
+ const range = maxTemp - minTemp;
+ const frac = range > 0 ? Math.min(1, Math.max(0, (temp - minTemp) / range)) : 0.5;
+ const rgb = COOL_RGB.map((c, i) => {
+ const mixed = c + (WARM_RGB[i] - c) * frac;
+ return Math.round(mixed + (255 - mixed) * LIGHTEN);
+ });
+ return `rgb(${rgb.join(',')})`;
+}
+
 // SVG path (viewBox 0 0 1000 100) tracing the approximate tide curve across the day.
 function sparklinePath(days, idx, samples = 96) {
  const anchors = tideAnchors(days, idx);
@@ -151,6 +167,15 @@ export default function App() {
  const checkOverlap = (tideVal) => {
  return (tideVal - TIDE_BUFFER < HOT_END && tideVal + TIDE_BUFFER > HOT_START);
  };
+
+ // Whichever temp is currently on display per day (live-fetched if available, static fallback
+ // otherwise) — the color scale's min/max are derived from these, never hardcoded.
+ const dayTemps = TRIP_DATA.map((day) => {
+ const liveMax = liveTemps[toISODate(day.date)];
+ return liveMax !== undefined ? Math.round(liveMax) : day.temp;
+ });
+ const minTemp = Math.min(...dayTemps);
+ const maxTemp = Math.max(...dayTemps);
 
  return (
  <div className="min-h-screen bg-[#FDFDFD] text-slate-800 p-4 sm:p-12 font-sans flex justify-center">
@@ -195,12 +220,18 @@ export default function App() {
 
  {/* Tide Sparkline — illustrative curve through the known high-tide points, not a real prediction */}
  <svg
- className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-7 sm:h-6 w-full overflow-visible text-blue-200"
+ className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-7 sm:h-6 w-full overflow-visible"
  viewBox="0 0 1000 100"
  preserveAspectRatio="none"
  aria-hidden="true"
  >
- <path d={sparklinePath(TRIP_DATA, idx)} fill="none" stroke="currentColor" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+ <path
+ d={sparklinePath(TRIP_DATA, idx)}
+ fill="none"
+ stroke={tempToColor(dayTemps[idx], minTemp, maxTemp)}
+ strokeWidth="2"
+ vectorEffect="non-scaling-stroke"
+ />
  </svg>
 
  {/* Heat Band */}
@@ -266,7 +297,7 @@ export default function App() {
  </div>
  </div>
  <p className="mt-3 text-center text-[11px] sm:text-[10px] text-slate-400 italic">
- Tide curve is illustrative — not a precise tide prediction.
+ Tide curve is illustrative — not a precise tide prediction. Curve color = that day's temp (blue cooler → orange warmer).
  </p>
 
  </div>
