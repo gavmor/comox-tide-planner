@@ -128,7 +128,7 @@ function tideHeightAt(anchors, t) {
 // so the gradient never passes through green/yellow — stays a muted blue↔orange axis.
 const COOL_RGB = [96, 165, 250]; // blue-400
 const WARM_RGB = [234, 88, 12]; // orange-600
-const LIGHTEN = 0.6; // pull toward white so the sparkline stays subtle under the heat band/dots
+const LIGHTEN = 0.2; // pull toward white slightly, but keep the curve clearly visible against the background
 
 function tempToColor(temp, minTemp, maxTemp) {
  const range = maxTemp - minTemp;
@@ -150,7 +150,7 @@ function sparklinePath(days, idx, samples = 96) {
  const heights = pts.map((p) => p.h);
  const minH = Math.min(...heights);
  const range = Math.max(...heights) - minH || 1;
- const PAD = 15; // percent padding top/bottom so the curve doesn't touch the row edges
+ const PAD = 10; // percent padding top/bottom so the curve doesn't touch the row edges
  const toX = (t) => ((t / 24) * 1000).toFixed(1);
  const toY = (h) => (100 - PAD - ((h - minH) / range) * (100 - 2 * PAD)).toFixed(1);
  return pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(p.t)} ${toY(p.h)}`).join(' ');
@@ -229,7 +229,7 @@ export default function App() {
  d={sparklinePath(TRIP_DATA, idx)}
  fill="none"
  stroke={tempToColor(dayTemps[idx], minTemp, maxTemp)}
- strokeWidth="2"
+ strokeWidth="3"
  vectorEffect="non-scaling-stroke"
  />
  </svg>
