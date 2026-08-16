@@ -11,6 +11,9 @@ const TRIP_DATA = [
  { day: 'Sun', date: 'Aug 23', temp: 21, tempF: 70, note: 'Est.', tides: [{ time: '12:28am', val: 0.47, h: 3.9 }, { time: '5:09pm', val: 17.15, h: 4.5 }] },
 ];
 
+const AXIS_LABELS = ['12 AM', '6 AM', '12 PM', '6 PM', '12 AM'];
+const MINI_AXIS_LABELS = ['12a', '6a', '12p', '6p', '12a'];
+
 export default function App() {
  // Define peak heat hours (1 PM to 5 PM) and buffer for tide overlap
  const HOT_START = 13;
@@ -22,45 +25,44 @@ export default function App() {
  };
 
  return (
- <div className="min-h-screen bg-[#FDFDFD] text-slate-800 p-6 sm:p-12 font-sans flex justify-center">
+ <div className="min-h-screen bg-[#FDFDFD] text-slate-800 p-4 sm:p-12 font-sans flex justify-center">
  <div className="w-full max-w-3xl">
 
- {/* Minimal Header */}
- <header className="mb-16 border-b border-slate-100 pb-8">
- <h1 className="text-3xl sm:text-4xl font-light tracking-tight text-slate-900">Comox Planner</h1>
- <p className="text-slate-400 mt-2 text-sm tracking-wide uppercase">August 14–23 • Tides & Peak Heat</p>
+ {/* Header */}
+ <header className="mb-6 sm:mb-16 border-b border-slate-200 pb-5 sm:pb-8">
+ <h1 className="text-2xl sm:text-4xl font-semibold sm:font-light tracking-tight text-slate-900">Comox Planner</h1>
+ <p className="text-slate-500 mt-1.5 sm:mt-2 text-xs sm:text-sm tracking-wide uppercase">August 14–23 • Tides & Peak Heat</p>
  </header>
 
- {/* Global Timeline Axis (Abstract) */}
- <div className="flex justify-between text-[10px] font-medium text-slate-300 ml-28 mb-6 px-2">
- <span>12 AM</span>
- <span>12 PM</span>
- <span>12 AM</span>
+ {/* Global Timeline Axis — sticky so it stays visible while scrolling a long list */}
+ <div className="sticky top-0 z-20 bg-[#FDFDFD]/95 backdrop-blur-sm flex justify-between text-[11px] sm:text-[10px] font-semibold sm:font-medium text-slate-500 sm:ml-28 mb-4 sm:mb-6 px-1 py-2 border-b border-slate-100">
+ {AXIS_LABELS.map((label, i) => <span key={i}>{label}</span>)}
  </div>
 
- <div className="space-y-12">
+ <div className="space-y-7 sm:space-y-12">
  {TRIP_DATA.map((day, idx) => {
  return (
- <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-6 group hover:opacity-100 transition-opacity">
+ <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-6">
 
- {/* Minimal Date & Temp Sidebar */}
- <div className="w-28 shrink-0 flex sm:flex-col items-baseline sm:items-start gap-3 sm:gap-0">
- <span className="text-sm font-medium text-slate-800">{day.day}, {day.date}</span>
- <span className="text-xs text-slate-400 font-light tracking-wide">
- {day.temp}°C {day.note && <span className="ml-1 text-[10px] italic">({day.note})</span>}
+ {/* Date & Temp — full-width row on mobile so it can't wrap or misalign, sidebar column on desktop */}
+ <div className="w-full sm:w-28 shrink-0 flex items-baseline justify-between sm:flex-col sm:items-start sm:justify-start gap-0">
+ <span className="text-base sm:text-sm font-semibold sm:font-medium text-slate-900 whitespace-nowrap">{day.day}, {day.date}</span>
+ <span className="text-sm sm:text-xs text-slate-500 sm:text-slate-400 font-medium sm:font-light tracking-wide whitespace-nowrap">
+ {day.temp}°C {day.note && <span className="ml-1 text-xs sm:text-[10px] italic">({day.note})</span>}
  </span>
  </div>
 
- {/* Abstract Timeline Bar */}
- <div className="flex-1 relative h-[1px] bg-slate-200 mt-6 sm:mt-0 mx-2 sm:mx-0">
+ {/* Timeline Bar */}
+ <div className="flex-1">
+ <div className="relative h-1 sm:h-[1px] bg-slate-200 rounded-full mt-8 sm:mt-0 mx-1 sm:mx-0">
 
- {/* Heat Band (Subtle) */}
+ {/* Heat Band */}
  <div
- className="absolute h-[24px] bg-orange-50 top-1/2 -translate-y-1/2 transition-all duration-300 border-x border-orange-100/50"
+ className="absolute h-7 sm:h-6 bg-orange-200/80 top-1/2 -translate-y-1/2 transition-all duration-300 border-x-2 border-orange-400/70"
  style={{
  left: `${(HOT_START / 24) * 100}%`,
  width: `${((HOT_END - HOT_START) / 24) * 100}%`,
- borderRadius: '2px'
+ borderRadius: '4px'
  }}
  />
 
@@ -68,6 +70,8 @@ export default function App() {
  {day.tides.map((tide, i) => {
  const isOverlapping = checkOverlap(tide.val);
  const leftPct = (tide.val / 24) * 100;
+ // Near either edge, centering the label on the dot pushes it off-screen — anchor to the dot's edge instead.
+ const labelAlign = leftPct < 8 ? 'left-0' : leftPct > 92 ? 'right-0' : 'left-1/2 -translate-x-1/2';
 
  return (
  <div
@@ -75,37 +79,43 @@ export default function App() {
  className="absolute top-1/2 -translate-y-1/2 flex flex-col items-center z-10"
  style={{ left: `${leftPct}%` }}
  >
- {/* Minimal Text Label */}
- <span className={`absolute bottom-4 text-[10px] tracking-wider font-medium whitespace-nowrap transition-colors
- ${isOverlapping ? 'text-red-400' : 'text-blue-400'}`}>
+ {/* Text Label */}
+ <span className={`absolute bottom-5 sm:bottom-4 ${labelAlign} text-xs sm:text-[10px] tracking-wide font-semibold sm:font-medium whitespace-nowrap transition-colors
+ ${isOverlapping ? 'text-red-600 sm:text-red-500' : 'text-blue-600 sm:text-blue-500'}`}>
  {tide.time}
  </span>
 
  {/* Status Dot */}
- <div className={`w-2.5 h-2.5 rounded-full ring-4 transition-all
+ <div className={`w-3.5 h-3.5 sm:w-2.5 sm:h-2.5 rounded-full ring-4 transition-all
  ${isOverlapping
- ? 'bg-red-400 ring-red-50'
- : 'bg-blue-400 ring-blue-50'}`}
+ ? 'bg-red-500 ring-red-100'
+ : 'bg-blue-500 ring-blue-100'}`}
  />
  </div>
  );
  })}
  </div>
+
+ {/* Per-row mini axis — mobile only, so each row is readable without scrolling back to the header */}
+ <div className="flex justify-between text-[10px] font-medium text-slate-400 mt-1.5 px-1 sm:hidden">
+ {MINI_AXIS_LABELS.map((label, i) => <span key={i}>{label}</span>)}
+ </div>
+ </div>
  </div>
  );
  })}
  </div>
 
- {/* Minimal Legend/Footer */}
- <div className="mt-24 pt-8 border-t border-slate-50 flex flex-wrap items-center justify-center gap-8 text-xs text-slate-400 font-light">
+ {/* Legend/Footer */}
+ <div className="mt-14 sm:mt-24 pt-8 border-t border-slate-100 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-xs text-slate-500 font-medium sm:font-light">
  <div className="flex items-center gap-2">
- <div className="w-2 h-2 rounded-full bg-blue-400"></div> Clear High Tide
+ <div className="w-2.5 h-2.5 rounded-full bg-blue-500"></div> Clear High Tide
  </div>
  <div className="flex items-center gap-2">
- <div className="w-2 h-2 rounded-full bg-red-400"></div> Heat Overlap
+ <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div> Heat Overlap
  </div>
  <div className="flex items-center gap-2">
- <div className="w-4 h-4 rounded-sm bg-orange-50 border border-orange-100/50"></div> Peak Heat (1PM - 5PM)
+ <div className="w-4 h-4 rounded-sm bg-orange-200/80 border-2 border-orange-400/70"></div> Peak Heat (1PM - 5PM)
  </div>
  </div>
 
