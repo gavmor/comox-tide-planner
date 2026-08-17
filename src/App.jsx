@@ -209,7 +209,7 @@ export default function App() {
  </header>
 
  {/* Global Timeline Axis — sticky so it stays visible while scrolling a long list */}
- <div className="sticky top-0 z-20 bg-[#FDFDFD]/95 backdrop-blur-sm flex justify-between text-[11px] sm:text-[10px] font-semibold sm:font-medium text-slate-500 sm:ml-28 mb-4 sm:mb-6 px-1 py-2 border-b border-slate-100">
+ <div className="sticky top-0 z-20 bg-[#FDFDFD]/95 backdrop-blur-sm flex justify-between text-[11px] sm:text-[10px] font-semibold sm:font-medium text-slate-500 sm:ml-24 mb-4 sm:mb-6 px-1 py-2 border-b border-slate-100">
  {AXIS_LABELS.map((label, i) => <span key={i}>{label}</span>)}
  </div>
 
@@ -220,24 +220,24 @@ export default function App() {
  const displayTemp = hasLive ? Math.round(liveMax) : day.temp;
 
  return (
- <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-6">
+ <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-6">
 
- {/* Date & Temp — full-width row on mobile so it can't wrap or misalign, sidebar column on desktop */}
- <div className="w-full sm:w-28 shrink-0 flex items-baseline justify-between sm:flex-col sm:items-start sm:justify-start gap-0">
- <span className="text-base sm:text-sm font-semibold sm:font-medium text-slate-900 whitespace-nowrap">{day.day}, {day.date}</span>
- <span className="text-sm sm:text-xs text-slate-500 sm:text-slate-400 font-medium sm:font-light tracking-wide whitespace-nowrap">
- {displayTemp}°C {day.note && !hasLive && <span className="ml-1 text-xs sm:text-[10px] italic">({day.note})</span>}
+ {/* Date & Temp — compact caption row on mobile so it reads as a label, not a headline; sidebar column on desktop */}
+ <div className="w-full sm:w-24 shrink-0 flex items-baseline justify-between sm:flex-col sm:items-start sm:justify-start gap-0 leading-tight">
+ <span className="text-xs sm:text-sm font-semibold sm:font-medium text-slate-900 whitespace-nowrap">{day.day}, {day.date}</span>
+ <span className="text-[11px] sm:text-xs text-slate-500 sm:text-slate-400 font-medium sm:font-light tracking-wide whitespace-nowrap">
+ {displayTemp}°C {day.note && !hasLive && <span className="ml-1 text-[10px] italic">({day.note})</span>}
  </span>
  </div>
 
  {/* Timeline Bar */}
  <div className="flex-1">
- <div className="relative h-1 sm:h-[1px] bg-slate-200 rounded-full mt-8 sm:mt-0 mx-1 sm:mx-0">
+ <div className="relative h-1 sm:h-[1px] bg-slate-200 rounded-full mt-6 sm:mt-0 mx-1 sm:mx-0">
 
  {/* Daylight Band — sunrise to sunset (suncalc, astronomical). Taller than the heat band so its
  edge borders still mark the exact transition times where the two bands overlap in the afternoon. */}
  <div
- className="absolute h-9 sm:h-8 bg-yellow-50/70 top-1/2 -translate-y-1/2 border-x-2 border-yellow-300/60"
+ className="absolute h-11 sm:h-9 bg-yellow-50/70 top-1/2 -translate-y-1/2 border-x-2 border-yellow-300/60"
  style={{
  left: `${(DAYLIGHT[idx].sunrise / 24) * 100}%`,
  width: `${((DAYLIGHT[idx].sunset - DAYLIGHT[idx].sunrise) / 24) * 100}%`,
@@ -247,7 +247,7 @@ export default function App() {
 
  {/* Tide Sparkline — illustrative curve through the known high-tide points, not a real prediction */}
  <svg
- className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-7 sm:h-6 w-full overflow-visible"
+ className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-9 sm:h-7 w-full overflow-visible"
  viewBox="0 0 1000 100"
  preserveAspectRatio="none"
  aria-hidden="true"
@@ -263,7 +263,7 @@ export default function App() {
 
  {/* Heat Band */}
  <div
- className="absolute h-7 sm:h-6 bg-orange-200/80 top-1/2 -translate-y-1/2 transition-all duration-300 border-x-2 border-orange-400/70"
+ className="absolute h-9 sm:h-7 bg-orange-200/80 top-1/2 -translate-y-1/2 transition-all duration-300 border-x-2 border-orange-400/70"
  style={{
  left: `${(HOT_START / 24) * 100}%`,
  width: `${((HOT_END - HOT_START) / 24) * 100}%`,
@@ -285,7 +285,7 @@ export default function App() {
  style={{ left: `${leftPct}%` }}
  >
  {/* Text Label */}
- <span className={`absolute bottom-5 sm:bottom-4 ${labelAlign} text-xs sm:text-[10px] tracking-wide font-semibold sm:font-medium whitespace-nowrap transition-colors
+ <span className={`absolute bottom-6 sm:bottom-5 ${labelAlign} text-xs sm:text-[10px] tracking-wide font-semibold sm:font-medium whitespace-nowrap transition-colors
  ${isOverlapping ? 'text-red-600 sm:text-red-500' : 'text-blue-600 sm:text-blue-500'}`}>
  {tide.time}
  </span>
