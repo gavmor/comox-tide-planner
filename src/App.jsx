@@ -266,8 +266,8 @@ export default function App() {
  d={sparklinePath(TRIP_DATA, idx)}
  fill="none"
  stroke={tempToColor(dayTemps[idx], minTemp, maxTemp)}
- strokeWidth="3"
- vectorEffect="non-scaling-stroke"
+ stroke-width="15"
+ vector-effect="non-scaling-stroke"
  />
  </svg>
 
