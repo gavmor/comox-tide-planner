@@ -51,6 +51,17 @@ function formatTimeInTZ(date, timeZone) {
  }).format(date).replace(' ', '').toLowerCase();
 }
 
+// Drives the "now" scrubber — ticks every 30s so the marker creeps across the row live,
+// without a page reload, while staying cheap enough to leave running indefinitely.
+function useNow(intervalMs = 30000) {
+ const [now, setNow] = useState(() => new Date());
+ useEffect(() => {
+ const id = setInterval(() => setNow(new Date()), intervalMs);
+ return () => clearInterval(id);
+ }, [intervalMs]);
+ return now;
+}
+
 // Sunrise/sunset are purely astronomical (date + lat/lon), unlike the live temps above —
 // computed once at module load since TRIP_DATA's dates never change.
 const DAYLIGHT = TRIP_DATA.map((day) => {
@@ -233,6 +244,15 @@ function sparklinePath(anchors, dayIdx, samples = 96) {
 export default function App() {
  const { temps: liveTemps, updatedAt } = useLiveTemps();
  const { status: tideStatus, anchors: tideAnchors } = useTideData();
+ const now = useNow();
+
+ // "Now" scrubber only renders on the trip day matching today's real date in the trip's
+ // timezone — no clamping to the nearest day if the real date falls outside the trip range.
+ const todayISO = now.toLocaleDateString('en-CA', { timeZone: TRIP_TZ });
+ const nowIdx = TRIP_DATA.findIndex((d) => toISODate(d.date) === todayISO);
+ const nowHourPct = (decimalHourInTZ(now, TRIP_TZ) / 24) * 100;
+ const nowLabel = formatTimeInTZ(now, TRIP_TZ);
+ const nowLabelAlign = nowHourPct < 8 ? 'left-0' : nowHourPct > 92 ? 'right-0' : 'left-1/2 -translate-x-1/2';
 
  // Define peak heat hours (1 PM to 5 PM) and buffer for tide overlap
  const HOT_START = 13;
@@ -265,7 +285,7 @@ export default function App() {
  </header>
 
  {/* Global Timeline Axis — sticky so it stays visible while scrolling a long list */}
- <div className="sticky top-0 z-20 bg-[#FDFDFD]/95 backdrop-blur-sm flex justify-between text-[11px] sm:text-[10px] font-semibold sm:font-medium text-slate-500 sm:ml-28 mb-4 sm:mb-6 px-1 py-2 border-b border-slate-100">
+ <div className="sticky top-0 z-20 bg-[#FDFDFD]/95 backdrop-blur-sm flex justify-between text-[11px] sm:text-[10px] font-semibold sm:font-medium text-slate-500 sm:ml-24 mb-4 sm:mb-6 px-1 py-2 border-b border-slate-100">
  {AXIS_LABELS.map((label, i) => <span key={i}>{label}</span>)}
  </div>
 
@@ -276,24 +296,24 @@ export default function App() {
  const displayTemp = hasLive ? Math.round(liveMax) : day.temp;
 
  return (
- <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-6">
+ <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-6">
 
- {/* Date & Temp — full-width row on mobile so it can't wrap or misalign, sidebar column on desktop */}
- <div className="w-full sm:w-28 shrink-0 flex items-baseline justify-between sm:flex-col sm:items-start sm:justify-start gap-0">
- <span className="text-base sm:text-sm font-semibold sm:font-medium text-slate-900 whitespace-nowrap">{day.day}, {day.date}</span>
- <span className="text-sm sm:text-xs text-slate-500 sm:text-slate-400 font-medium sm:font-light tracking-wide whitespace-nowrap">
+ {/* Date & Temp — compact caption row on mobile so it reads as a label, not a headline; sidebar column on desktop */}
+ <div className="w-full sm:w-24 shrink-0 flex items-baseline justify-between sm:flex-col sm:items-start sm:justify-start gap-0 leading-tight">
+ <span className="text-xs sm:text-sm font-semibold sm:font-medium text-slate-900 whitespace-nowrap">{day.day}, {day.date}</span>
+ <span className="text-[11px] sm:text-xs text-slate-500 sm:text-slate-400 font-medium sm:font-light tracking-wide whitespace-nowrap">
  {displayTemp}°C
  </span>
  </div>
 
  {/* Timeline Bar */}
  <div className="flex-1">
- <div className="relative h-1 sm:h-[1px] bg-slate-200 rounded-full mt-8 sm:mt-0 mx-1 sm:mx-0">
+ <div className="relative h-1 sm:h-[1px] bg-slate-200 rounded-full mt-6 sm:mt-0 mx-1 sm:mx-0">
 
  {/* Daylight Band — sunrise to sunset (suncalc, astronomical). Taller than the heat band so its
  edge borders still mark the exact transition times where the two bands overlap in the afternoon. */}
  <div
- className="absolute h-9 sm:h-8 bg-yellow-50/70 top-1/2 -translate-y-1/2 border-x-2 border-yellow-300/60"
+ className="absolute h-11 sm:h-9 bg-yellow-50/70 top-1/2 -translate-y-1/2 border-x-2 border-yellow-300/60"
  style={{
  left: `${(DAYLIGHT[idx].sunrise / 24) * 100}%`,
  width: `${((DAYLIGHT[idx].sunset - DAYLIGHT[idx].sunrise) / 24) * 100}%`,
@@ -304,7 +324,7 @@ export default function App() {
  {/* Tide Sparkline — cosine-interpolated between real CHS predicted highs/lows */}
  {tideAnchors && (
  <svg
- className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-7 sm:h-6 w-full overflow-visible"
+ className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-9 sm:h-7 w-full overflow-visible"
  viewBox="0 0 1000 100"
  preserveAspectRatio="none"
  aria-hidden="true"
@@ -321,7 +341,7 @@ export default function App() {
 
  {/* Heat Band */}
  <div
- className="absolute h-7 sm:h-6 bg-orange-200/80 top-1/2 -translate-y-1/2 transition-all duration-300 border-x-2 border-orange-400/70"
+ className="absolute h-9 sm:h-7 bg-orange-200/80 top-1/2 -translate-y-1/2 transition-all duration-300 border-x-2 border-orange-400/70"
  style={{
  left: `${(HOT_START / 24) * 100}%`,
  width: `${((HOT_END - HOT_START) / 24) * 100}%`,
@@ -350,7 +370,7 @@ export default function App() {
  {isHigh ? (
  <>
  {/* Text Label */}
- <span className={`absolute bottom-5 sm:bottom-4 ${labelAlign} text-xs sm:text-[10px] tracking-wide font-semibold sm:font-medium whitespace-nowrap transition-colors
+ <span className={`absolute bottom-6 sm:bottom-5 ${labelAlign} text-xs sm:text-[10px] tracking-wide font-semibold sm:font-medium whitespace-nowrap transition-colors
  ${isOverlapping ? 'text-red-600 sm:text-red-500' : 'text-blue-600 sm:text-blue-500'}`}>
  {formatTimeInTZ(tide.date, TRIP_TZ)}
  </span>
@@ -376,6 +396,20 @@ export default function App() {
  </div>
  );
  })}
+
+ {/* "Now" Scrubber — live marker on today's row only, spanning the full row height so it
+ visibly cuts across the daylight band, heat band, sparkline and tide dots beneath it. */}
+ {idx === nowIdx && (
+ <div
+ className="absolute top-1/2 -translate-y-1/2 z-30 flex flex-col items-center"
+ style={{ left: `${nowHourPct}%` }}
+ >
+ <span className={`absolute -top-7 sm:-top-6 ${nowLabelAlign} text-xs sm:text-[10px] font-bold text-slate-900 whitespace-nowrap tracking-wide`}>
+ now · {nowLabel}
+ </span>
+ <div className="w-0.5 sm:w-0.5 h-20 sm:h-16 bg-slate-900 rounded-full" />
+ </div>
+ )}
  </div>
 
  {/* Per-row mini axis — mobile only, so each row is readable without scrolling back to the header */}
