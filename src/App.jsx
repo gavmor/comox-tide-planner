@@ -24,9 +24,10 @@ const toISODate = (dateStr) => {
  return `${TRIP_YEAR}-${MONTH_NUM[mon]}-${day.padStart(2, '0')}`;
 };
 
-const COMOX_LAT = 49.6734;
-const COMOX_LON = -124.928;
-const COMOX_TZ = 'America/Vancouver';
+// Denman Island West ferry terminal (Buckley Bay <-> Denman Island route) — the trip's actual location.
+const TRIP_LAT = 49.5344473;
+const TRIP_LON = -124.823743;
+const TRIP_TZ = 'America/Vancouver';
 
 function useLiveTemps() {
  const [temps, setTemps] = useState({});
@@ -36,7 +37,7 @@ function useLiveTemps() {
  let cancelled = false;
 
  async function fetchRange(baseUrl, startISO, endISO) {
- const url = `${baseUrl}?latitude=${COMOX_LAT}&longitude=${COMOX_LON}&start_date=${startISO}&end_date=${endISO}&daily=temperature_2m_max&timezone=${encodeURIComponent(COMOX_TZ)}`;
+ const url = `${baseUrl}?latitude=${TRIP_LAT}&longitude=${TRIP_LON}&start_date=${startISO}&end_date=${endISO}&daily=temperature_2m_max&timezone=${encodeURIComponent(TRIP_TZ)}`;
  const res = await fetch(url);
  if (!res.ok) return {};
  const json = await res.json();
@@ -50,7 +51,7 @@ function useLiveTemps() {
  async function load() {
  try {
  const isoDates = TRIP_DATA.map((d) => toISODate(d.date));
- const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: COMOX_TZ });
+ const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: TRIP_TZ });
  const pastDates = isoDates.filter((d) => d < todayISO);
  const futureDates = isoDates.filter((d) => d >= todayISO);
 
