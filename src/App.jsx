@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { getTimes as getSunTimes } from 'suncalc';
+import { sparklinePath, heatExposureScore } from './tideMath';
+import HeatExposureBand from './HeatExposureBand';
 
 const TRIP_DATA = [
  { day: 'Fri', date: 'Aug 14', temp: 24, tempF: 75 },
@@ -213,34 +215,6 @@ function useTideData() {
  return state;
 }
 
-// Cosine interpolation between two real, known extrema — legitimate now that both ends of
-// every segment are actual CHS predictions rather than an invented trough estimate.
-function tideHeightAt(anchors, absHour) {
- for (let i = 0; i < anchors.length - 1; i++) {
- const a = anchors[i], b = anchors[i + 1];
- if (absHour < a.absHour || absHour > b.absHour) continue;
- const frac = (absHour - a.absHour) / (b.absHour - a.absHour || 1);
- return a.h + (b.h - a.h) * ((1 - Math.cos(Math.PI * frac)) / 2);
- }
- return absHour < anchors[0].absHour ? anchors[0].h : anchors.at(-1).h;
-}
-
-// SVG path (viewBox 0 0 1000 100) tracing the tide curve across the day, interpolated between
-// real CHS highs/lows (anchors span the whole trip + buffer days, not just this one).
-function sparklinePath(anchors, dayIdx, samples = 96) {
- const pts = Array.from({ length: samples + 1 }, (_, i) => {
- const t = (i / samples) * 24;
- return { t, h: tideHeightAt(anchors, dayIdx * 24 + t) };
- });
- const heights = pts.map((p) => p.h);
- const minH = Math.min(...heights);
- const range = Math.max(...heights) - minH || 1;
- const PAD = 10; // percent padding top/bottom so the curve doesn't touch the row edges
- const toX = (t) => ((t / 24) * 1000).toFixed(1);
- const toY = (h) => (100 - PAD - ((h - minH) / range) * (100 - 2 * PAD)).toFixed(1);
- return pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(p.t)} ${toY(p.h)}`).join(' ');
-}
-
 export default function App() {
  const { temps: liveTemps, updatedAt } = useLiveTemps();
  const { status: tideStatus, anchors: tideAnchors } = useTideData();
@@ -263,6 +237,21 @@ export default function App() {
  return (tideVal - TIDE_BUFFER < HOT_END && tideVal + TIDE_BUFFER > HOT_START);
  };
 
+ const tempForDay = (day) => {
+ const liveMax = liveTemps[toISODate(day.date)];
+ return liveMax !== undefined ? Math.round(liveMax) : day.temp;
+ };
+
+ const [exposureMode, setExposureMode] = useState(false);
+
+ // Trip-wide max score, computed once tide data is ready, so each day's shading/label can be
+ // scaled by severity relative to the worst day rather than in isolation.
+ const maxDegreeHours = tideAnchors
+ ? Math.max(
+ ...TRIP_DATA.map((day, idx) => heatExposureScore(tideAnchors, idx, tempForDay(day), HOT_START, HOT_END).degreeHours)
+ )
+ : 0;
+
  return (
  <div className="min-h-screen bg-[#FDFDFD] text-slate-800 p-4 sm:p-12 font-sans flex justify-center">
  <div className="w-full max-w-3xl">
@@ -282,6 +271,19 @@ export default function App() {
  {tideStatus === 'error' && (
  <p className="text-red-400 mt-2 text-[11px] sm:text-xs italic">Tide predictions unavailable — CHS IWLS API unreachable</p>
  )}
+ <button
+ type="button"
+ onClick={() => setExposureMode((v) => !v)}
+ className={`mt-4 inline-flex items-center gap-2 text-[11px] sm:text-xs font-semibold tracking-wide uppercase px-3 py-1.5 rounded-full border transition-colors
+ ${exposureMode ? 'bg-orange-600 text-white border-orange-600' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'}`}
+ >
+ {exposureMode ? 'Heat Exposure Score — On' : 'Show Heat Exposure Score'}
+ </button>
+ {exposureMode && (
+ <p className="text-slate-400 mt-2 text-[11px] sm:text-xs italic">
+ Meter-degree-hours: daily max °C × area under the tide curve (in meter-hours) during peak heat (1–5pm). Higher = bigger tide sitting under hotter sun.
+ </p>
+ )}
  </header>
 
  {/* Global Timeline Axis — sticky so it stays visible while scrolling a long list */}
@@ -291,9 +293,7 @@ export default function App() {
 
  <div className="space-y-7 sm:space-y-12">
  {TRIP_DATA.map((day, idx) => {
- const liveMax = liveTemps[toISODate(day.date)];
- const hasLive = liveMax !== undefined;
- const displayTemp = hasLive ? Math.round(liveMax) : day.temp;
+ const displayTemp = tempForDay(day);
 
  return (
  <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-6">
@@ -341,7 +341,10 @@ export default function App() {
 
  {/* Heat Band Halo — soft extension covering the tide-overlap buffer zone, so a tide dot
  flagged red for sitting within TIDE_BUFFER of peak heat still visually lands inside
- *something* highlighted, rather than floating outside the strict band with no cue. */}
+ *something* highlighted, rather than floating outside the strict band with no cue.
+ Hidden in exposure mode: the shaded curve area below already communicates severity
+ continuously, so the boolean-flag halo would be redundant clutter. */}
+ {!exposureMode && (
  <div
  className="absolute h-9 sm:h-7 bg-orange-100/40 top-1/2 -translate-y-1/2"
  style={{
@@ -350,10 +353,12 @@ export default function App() {
  borderRadius: '4px'
  }}
  />
+ )}
 
- {/* Heat Band */}
+ {/* Heat Band — in exposure mode, keep just the window border as a reference frame and
+ drop the flat fill, since HeatExposureBand below draws the real (non-flat) fill. */}
  <div
- className="absolute h-9 sm:h-7 bg-orange-200/80 top-1/2 -translate-y-1/2 transition-all duration-300 border-x-2 border-orange-400/70"
+ className={`absolute h-9 sm:h-7 top-1/2 -translate-y-1/2 transition-all duration-300 border-x-2 border-orange-400/70 ${exposureMode ? '' : 'bg-orange-200/80'}`}
  style={{
  left: `${(HOT_START / 24) * 100}%`,
  width: `${((HOT_END - HOT_START) / 24) * 100}%`,
@@ -361,8 +366,22 @@ export default function App() {
  }}
  />
 
- {/* Tide Markers — real CHS highs (filled dot, label above) and lows (ring dot, label below) */}
- {tideAnchors && tideAnchors
+ {/* Heat Exposure Score — "area under the curve" mode: shades the tide curve's actual
+ area within the peak-heat window and labels it with the meter-degree-hour score. */}
+ {exposureMode && tideAnchors && (
+ <HeatExposureBand
+ anchors={tideAnchors}
+ dayIdx={idx}
+ tempC={displayTemp}
+ hotStart={HOT_START}
+ hotEnd={HOT_END}
+ maxDegreeHours={maxDegreeHours}
+ />
+ )}
+
+ {/* Tide Markers — real CHS highs (filled dot, label above) and lows (ring dot, label below).
+ Hidden in exposure mode to keep focus on the shaded area + score label. */}
+ {!exposureMode && tideAnchors && tideAnchors
  .filter((a) => a.dayIdx === idx)
  .map((tide, i) => {
  const isHigh = tide.type === 'high';
