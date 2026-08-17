@@ -339,6 +339,18 @@ export default function App() {
  </svg>
  )}
 
+ {/* Heat Band Halo — soft extension covering the tide-overlap buffer zone, so a tide dot
+ flagged red for sitting within TIDE_BUFFER of peak heat still visually lands inside
+ *something* highlighted, rather than floating outside the strict band with no cue. */}
+ <div
+ className="absolute h-9 sm:h-7 bg-orange-100/40 top-1/2 -translate-y-1/2"
+ style={{
+ left: `${((HOT_START - TIDE_BUFFER) / 24) * 100}%`,
+ width: `${((HOT_END - HOT_START + 2 * TIDE_BUFFER) / 24) * 100}%`,
+ borderRadius: '4px'
+ }}
+ />
+
  {/* Heat Band */}
  <div
  className="absolute h-9 sm:h-7 bg-orange-200/80 top-1/2 -translate-y-1/2 transition-all duration-300 border-x-2 border-orange-400/70"
