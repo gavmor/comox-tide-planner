@@ -42,6 +42,26 @@ function decimalHourInTZ(date, timeZone) {
  return hour + minute / 60;
 }
 
+function formatTimeInTZ(date, timeZone) {
+ return new Intl.DateTimeFormat('en-US', {
+ timeZone,
+ hour: 'numeric',
+ minute: '2-digit',
+ hour12: true,
+ }).format(date).replace(' ', '').toLowerCase();
+}
+
+// Drives the "now" scrubber — ticks every 30s so the marker creeps across the row live,
+// without a page reload, while staying cheap enough to leave running indefinitely.
+function useNow(intervalMs = 30000) {
+ const [now, setNow] = useState(() => new Date());
+ useEffect(() => {
+ const id = setInterval(() => setNow(new Date()), intervalMs);
+ return () => clearInterval(id);
+ }, [intervalMs]);
+ return now;
+}
+
 // Sunrise/sunset are purely astronomical (date + lat/lon), unlike the live temps above —
 // computed once at module load since TRIP_DATA's dates never change.
 const DAYLIGHT = TRIP_DATA.map((day) => {
@@ -183,6 +203,15 @@ function sparklinePath(days, idx, samples = 96) {
 
 export default function App() {
  const { temps: liveTemps, updatedAt } = useLiveTemps();
+ const now = useNow();
+
+ // "Now" scrubber only renders on the trip day matching today's real date in the trip's
+ // timezone — no clamping to the nearest day if the real date falls outside the trip range.
+ const todayISO = now.toLocaleDateString('en-CA', { timeZone: TRIP_TZ });
+ const nowIdx = TRIP_DATA.findIndex((d) => toISODate(d.date) === todayISO);
+ const nowHourPct = (decimalHourInTZ(now, TRIP_TZ) / 24) * 100;
+ const nowLabel = formatTimeInTZ(now, TRIP_TZ);
+ const nowLabelAlign = nowHourPct < 8 ? 'left-0' : nowHourPct > 92 ? 'right-0' : 'left-1/2 -translate-x-1/2';
 
  // Define peak heat hours (1 PM to 5 PM) and buffer for tide overlap
  const HOT_START = 13;
@@ -299,6 +328,20 @@ export default function App() {
  </div>
  );
  })}
+
+ {/* "Now" Scrubber — live marker on today's row only, spanning the full row height so it
+ visibly cuts across the daylight band, heat band, sparkline and tide dots beneath it. */}
+ {idx === nowIdx && (
+ <div
+ className="absolute top-1/2 -translate-y-1/2 z-30 flex flex-col items-center"
+ style={{ left: `${nowHourPct}%` }}
+ >
+ <span className={`absolute -top-7 sm:-top-6 ${nowLabelAlign} text-xs sm:text-[10px] font-bold text-slate-900 whitespace-nowrap tracking-wide`}>
+ now · {nowLabel}
+ </span>
+ <div className="w-0.5 sm:w-0.5 h-20 sm:h-16 bg-slate-900 rounded-full" />
+ </div>
+ )}
  </div>
 
  {/* Per-row mini axis — mobile only, so each row is readable without scrolling back to the header */}
