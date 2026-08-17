@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
+import { getTimes as getSunTimes } from 'suncalc';
 
 const TRIP_DATA = [
  { day: 'Fri', date: 'Aug 14', temp: 24, tempF: 75, tides: [{ time: '6:48am', val: 6.8, h: 4.5 }, { time: '8:17pm', val: 20.28, h: 5.0 }] },
@@ -28,6 +29,30 @@ const toISODate = (dateStr) => {
 const TRIP_LAT = 49.5344473;
 const TRIP_LON = -124.823743;
 const TRIP_TZ = 'America/Vancouver';
+
+function decimalHourInTZ(date, timeZone) {
+ const parts = new Intl.DateTimeFormat('en-US', {
+ timeZone,
+ hour: 'numeric',
+ minute: 'numeric',
+ hour12: false,
+ }).formatToParts(date);
+ const hour = Number(parts.find((p) => p.type === 'hour').value) % 24;
+ const minute = Number(parts.find((p) => p.type === 'minute').value);
+ return hour + minute / 60;
+}
+
+// Sunrise/sunset are purely astronomical (date + lat/lon), unlike the live temps above —
+// computed once at module load since TRIP_DATA's dates never change.
+const DAYLIGHT = TRIP_DATA.map((day) => {
+ const [y, m, d] = toISODate(day.date).split('-').map(Number);
+ const noonUTC = new Date(Date.UTC(y, m - 1, d, 12));
+ const { sunrise, sunset } = getSunTimes(noonUTC, TRIP_LAT, TRIP_LON);
+ return {
+ sunrise: decimalHourInTZ(sunrise, TRIP_TZ),
+ sunset: decimalHourInTZ(sunset, TRIP_TZ),
+ };
+});
 
 function useLiveTemps() {
  const [temps, setTemps] = useState({});
@@ -219,6 +244,17 @@ export default function App() {
  <div className="flex-1">
  <div className="relative h-1 sm:h-[1px] bg-slate-200 rounded-full mt-8 sm:mt-0 mx-1 sm:mx-0">
 
+ {/* Daylight Band — sunrise to sunset (suncalc, astronomical). Taller than the heat band so its
+ edge borders still mark the exact transition times where the two bands overlap in the afternoon. */}
+ <div
+ className="absolute h-9 sm:h-8 bg-yellow-50/70 top-1/2 -translate-y-1/2 border-x-2 border-yellow-300/60"
+ style={{
+ left: `${(DAYLIGHT[idx].sunrise / 24) * 100}%`,
+ width: `${((DAYLIGHT[idx].sunset - DAYLIGHT[idx].sunrise) / 24) * 100}%`,
+ borderRadius: '4px'
+ }}
+ />
+
  {/* Tide Sparkline — illustrative curve through the known high-tide points, not a real prediction */}
  <svg
  className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-7 sm:h-6 w-full overflow-visible"
@@ -295,6 +331,9 @@ export default function App() {
  </div>
  <div className="flex items-center gap-2">
  <div className="w-4 h-4 rounded-sm bg-orange-200/80 border-2 border-orange-400/70"></div> Peak Heat (1PM - 5PM)
+ </div>
+ <div className="flex items-center gap-2">
+ <div className="w-4 h-4 rounded-sm bg-yellow-50/70 border-2 border-yellow-300/60"></div> Daylight (Sunrise–Sunset)
  </div>
  </div>
  <p className="mt-3 text-center text-[11px] sm:text-[10px] text-slate-400 italic">

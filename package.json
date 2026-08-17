@@ -10,7 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "preact": "^10.29.7"
+    "preact": "^10.29.7",
+    "suncalc": "^2.0.1"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",

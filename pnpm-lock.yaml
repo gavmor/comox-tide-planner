@@ -11,6 +11,9 @@ importers:
       preact:
         specifier: ^10.29.7
         version: 10.29.8
+      suncalc:
+        specifier: ^2.0.1
+        version: 2.0.1
     devDependencies:
       '@preact/preset-vite':
         specifier: ^2.10.6
@@ -704,6 +707,9 @@ packages:
     resolution: {integrity: sha512-H6D7134xi6qONvh7ZHKgviXf+rd3vhGBSvebPZCaUkd8zvQ+7PtDw6CljPTe4cXWNf2IKZGNqw6VJXSb9IgBpA==}
     engines: {node: '>=20.0.0'}
 
+  suncalc@2.0.1:
+    resolution: {integrity: sha512-wjujU+HpsP1TUvN3/9dFkVQQCsMZbk7PkdZsASRJR4jVPHCm9Qy0FVkFTqXfs70Ag2yheN7ZUavzCyOjhJDGxQ==}
+
   tailwindcss@4.3.3:
     resolution: {integrity: sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==}
 
@@ -1347,6 +1353,8 @@ snapshots:
   source-map@0.7.6: {}
 
   stack-trace@1.0.0: {}
+
+  suncalc@2.0.1: {}
 
   tailwindcss@4.3.3: {}
 
