@@ -112,8 +112,18 @@ function useLiveTemps() {
 // Semi-diurnal (M2) tides run ~12.4h between successive highs — used only to shape an
 // illustrative curve, not to predict real tide times/heights (we have no CHS API access).
 const TIDE_PERIOD_H = 12.4;
-const LOW_TIDE_DROP = 3.2;
-const MIN_LOW_HEIGHT = 0.6;
+const TIDE_CURVE_COLOR = '#94a3b8'; // slate-400 — fixed, not tied to any data value
+
+// Trough depth as a fraction of the segment's own average high-tide height, so bigger highs
+// naturally produce bigger swings instead of every trough converging on the same floor.
+const TROUGH_DEPTH_RATIO = 0.28;
+// Adjusts that ratio by the two highs' own difference — real tides show a "diurnal
+// inequality" (unequal highs) that a flat drop constant erases.
+const TROUGH_ASYMMETRY = 0.06;
+// Skews the trough's timing away from the segment midpoint (toward the lower high), mimicking
+// the real rise/fall duration asymmetry of tides — a dead-center trough reads as mechanical.
+const SKEW_PER_UNIT_DIFF = 0.04;
+const MAX_SKEW = 0.08;
 
 // Highs bracketing this day's [0, 24] window, including the neighboring days' nearest
 // high so the curve extrapolates smoothly across midnight instead of flattening at the edges.
@@ -131,15 +141,20 @@ function tideAnchors(days, idx) {
  return [prevAnchor, ...own, nextAnchor];
 }
 
-// Height between two known highs: a raised-cosine descent to an estimated trough at the
-// midpoint, then a raised-cosine ascent back up — smooth, continuous, and passes exactly
-// through each known high.
+// Height between two known highs: a cosine descent to an estimated trough, then a cosine
+// ascent back up — smooth, continuous, and passes exactly through each known high. Both the
+// trough's depth and its timing are derived from the segment's own two highs (see the
+// TROUGH_*/SKEW_* constants above) so troughs vary with each day's real tide range instead
+// of every day converging on an identical shape.
 function tideHeightAt(anchors, t) {
  for (let i = 0; i < anchors.length - 1; i++) {
  const a = anchors[i], b = anchors[i + 1];
  if (t < a.t || t > b.t) continue;
- const mid = (a.t + b.t) / 2;
- const troughH = Math.max(MIN_LOW_HEIGHT, (a.h + b.h) / 2 - LOW_TIDE_DROP);
+ const avgH = (a.h + b.h) / 2;
+ const diff = b.h - a.h;
+ const troughH = avgH * (TROUGH_DEPTH_RATIO - diff * TROUGH_ASYMMETRY);
+ const skew = Math.max(-MAX_SKEW, Math.min(MAX_SKEW, diff * SKEW_PER_UNIT_DIFF));
+ const mid = a.t + (b.t - a.t) * (0.5 - skew);
  if (t <= mid) {
  const frac = (t - a.t) / (mid - a.t || 1);
  return troughH + (a.h - troughH) * ((1 + Math.cos(Math.PI * frac)) / 2);
@@ -148,22 +163,6 @@ function tideHeightAt(anchors, t) {
  return troughH + (b.h - troughH) * ((1 - Math.cos(Math.PI * frac)) / 2);
  }
  return anchors[0].h;
-}
-
-// Diverging cool→warm color scale for the daily temp, blended in RGB (not hue-rotated)
-// so the gradient never passes through green/yellow — stays a muted blue↔orange axis.
-const COOL_RGB = [96, 165, 250]; // blue-400
-const WARM_RGB = [234, 88, 12]; // orange-600
-const LIGHTEN = 0.2; // pull toward white slightly, but keep the curve clearly visible against the background
-
-function tempToColor(temp, minTemp, maxTemp) {
- const range = maxTemp - minTemp;
- const frac = range > 0 ? Math.min(1, Math.max(0, (temp - minTemp) / range)) : 0.5;
- const rgb = COOL_RGB.map((c, i) => {
- const mixed = c + (WARM_RGB[i] - c) * frac;
- return Math.round(mixed + (255 - mixed) * LIGHTEN);
- });
- return `rgb(${rgb.join(',')})`;
 }
 
 // SVG path (viewBox 0 0 1000 100) tracing the approximate tide curve across the day.
@@ -193,15 +192,6 @@ export default function App() {
  const checkOverlap = (tideVal) => {
  return (tideVal - TIDE_BUFFER < HOT_END && tideVal + TIDE_BUFFER > HOT_START);
  };
-
- // Whichever temp is currently on display per day (live-fetched if available, static fallback
- // otherwise) — the color scale's min/max are derived from these, never hardcoded.
- const dayTemps = TRIP_DATA.map((day) => {
- const liveMax = liveTemps[toISODate(day.date)];
- return liveMax !== undefined ? Math.round(liveMax) : day.temp;
- });
- const minTemp = Math.min(...dayTemps);
- const maxTemp = Math.max(...dayTemps);
 
  return (
  <div className="min-h-screen bg-[#FDFDFD] text-slate-800 p-4 sm:p-12 font-sans flex justify-center">
@@ -265,8 +255,8 @@ export default function App() {
  <path
  d={sparklinePath(TRIP_DATA, idx)}
  fill="none"
- stroke={tempToColor(dayTemps[idx], minTemp, maxTemp)}
- stroke-width="15"
+ stroke={TIDE_CURVE_COLOR}
+ stroke-width="7.5"
  vector-effect="non-scaling-stroke"
  />
  </svg>
@@ -337,7 +327,7 @@ export default function App() {
  </div>
  </div>
  <p className="mt-3 text-center text-[11px] sm:text-[10px] text-slate-400 italic">
- Tide curve is illustrative — not a precise tide prediction. Curve color = that day's temp (blue cooler → orange warmer).
+ Tide curve is illustrative — not a precise tide prediction.
  </p>
 
  </div>
