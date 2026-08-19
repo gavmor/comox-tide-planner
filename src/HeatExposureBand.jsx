@@ -4,10 +4,10 @@ import { heatExposureScore, heatExposureAreaPath } from './tideMath';
 // within the peak-heat window and labels it with the resulting meter-degree-hour score.
 // Severity (fill intensity) is scaled relative to the trip's max score so the worst days
 // visually pop against the mild ones — the point of the metric is to let days be ranked.
-export default function HeatExposureBand({ anchors, dayIdx, tempC, hotStart, hotEnd, maxDegreeHours }) {
+export default function HeatExposureBand({ anchors, dayIdx, tempC, hotStart, hotEnd, maxDegreeHours, globalRange }) {
  const { degreeHours } = heatExposureScore(anchors, dayIdx, tempC, hotStart, hotEnd);
  const severity = maxDegreeHours > 0 ? Math.min(degreeHours / maxDegreeHours, 1) : 0;
- const areaPath = heatExposureAreaPath(anchors, dayIdx, hotStart, hotEnd);
+ const areaPath = heatExposureAreaPath(anchors, dayIdx, hotStart, hotEnd, globalRange);
  const leftPct = (hotStart / 24) * 100;
  const widthPct = ((hotEnd - hotStart) / 24) * 100;
 

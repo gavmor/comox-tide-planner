@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { getTimes as getSunTimes } from 'suncalc';
-import { sparklinePath, heatExposureScore } from './tideMath';
+import { sparklinePath, heatExposureScore, globalTideRange, scaleFns, tideAxisTicks } from './tideMath';
 import HeatExposureBand from './HeatExposureBand';
 
 const TRIP_DATA = [
@@ -220,6 +220,13 @@ export default function App() {
  const { status: tideStatus, anchors: tideAnchors } = useTideData();
  const now = useNow();
 
+ // Shared vertical scale for every day's tide row — computed once across the whole trip's
+ // anchors so a 1m-swing day renders visibly flatter than a 4m-swing day instead of both being
+ // stretched to fill their own row independently.
+ const tideRange = tideAnchors ? globalTideRange(tideAnchors) : null;
+ const tideTicks = tideRange ? tideAxisTicks(tideRange.minH, tideRange.minH + tideRange.range) : [];
+ const tideToY = tideRange ? scaleFns(tideRange.minH, tideRange.range).toY : () => '50.0';
+
  // "Now" scrubber only renders on the trip day matching today's real date in the trip's
  // timezone — no clamping to the nearest day if the real date falls outside the trip range.
  const todayISO = now.toLocaleDateString('en-CA', { timeZone: TRIP_TZ });
@@ -287,8 +294,21 @@ export default function App() {
  </header>
 
  {/* Global Timeline Axis — sticky so it stays visible while scrolling a long list */}
- <div className="sticky top-0 z-20 bg-[#FDFDFD]/95 backdrop-blur-sm flex justify-between text-[11px] sm:text-[10px] font-semibold sm:font-medium text-slate-500 sm:ml-24 mb-4 sm:mb-6 px-1 py-2 border-b border-slate-100">
+ <div className="sticky top-0 z-20 bg-[#FDFDFD]/95 backdrop-blur-sm flex items-center text-[11px] sm:text-[10px] font-semibold sm:font-medium text-slate-500 mb-4 sm:mb-6 px-1 py-2 border-b border-slate-100">
+ {/* Vertical tide-height axis (meters) — same global scale as every row's curve below, so
+ these ticks describe the one shared scale every row is plotted against, not a per-day one.
+ Given its own taller box (independent of any single row's thin sparkline height) so five
+ ticks stay legible instead of colliding. */}
+ <div className="hidden sm:block relative w-24 h-20 shrink-0">
+ {tideTicks.map((m) => (
+ <span key={m} className="absolute right-3 -translate-y-1/2 text-slate-400 leading-none" style={{ top: `${tideToY(m)}%` }}>
+ {m}m
+ </span>
+ ))}
+ </div>
+ <div className="flex-1 flex justify-between">
  {AXIS_LABELS.map((label, i) => <span key={i}>{label}</span>)}
+ </div>
  </div>
 
  <div className="space-y-7 sm:space-y-12">
@@ -307,6 +327,19 @@ export default function App() {
  </div>
 
  {/* Timeline Bar */}
+ <div className="flex-1 flex sm:block">
+ {/* Mobile-only mini y-axis (meters) — desktop already has the sticky global legend above.
+ Same global scale, just the min/max ticks rather than the full set: the row's sparkline
+ strip is only ~36px tall, too little room to space out five labels without collision.
+ Same relative+mt-6 outer / absolute+centered+h-9 inner shape as the sparkline SVG below,
+ so the two stay pixel-aligned regardless of row height tweaks. */}
+ <div className="sm:hidden relative h-1 mt-6 mr-1 w-6 shrink-0">
+ <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-9 flex flex-col justify-between text-[9px] font-medium text-slate-400 leading-none">
+ {[tideTicks.at(-1), tideTicks[0]].map((m) => (
+ <span key={m} className="whitespace-nowrap">{m}m</span>
+ ))}
+ </div>
+ </div>
  <div className="flex-1">
  <div className="relative h-1 sm:h-[1px] bg-slate-200 rounded-full mt-6 sm:mt-0 mx-1 sm:mx-0">
 
@@ -330,7 +363,7 @@ export default function App() {
  aria-hidden="true"
  >
  <path
- d={sparklinePath(tideAnchors, idx)}
+ d={sparklinePath(tideAnchors, idx, tideRange)}
  fill="none"
  stroke={TIDE_CURVE_COLOR}
  stroke-width="7.5"
@@ -376,6 +409,7 @@ export default function App() {
  hotStart={HOT_START}
  hotEnd={HOT_END}
  maxDegreeHours={maxDegreeHours}
+ globalRange={tideRange}
  />
  )}
 
@@ -446,6 +480,7 @@ export default function App() {
  {/* Per-row mini axis — mobile only, so each row is readable without scrolling back to the header */}
  <div className="flex justify-between text-[10px] font-medium text-slate-400 mt-1.5 px-1 sm:hidden">
  {MINI_AXIS_LABELS.map((label, i) => <span key={i}>{label}</span>)}
+ </div>
  </div>
  </div>
  </div>
